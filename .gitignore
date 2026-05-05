@@ -1,55 +1,19 @@
-# Prerequisites
-*.d
+# Arquivos e pastas de configuração do editor VS Code
+.vscode/
 
-# Object files
+# Pasta principal do PlatformIO com builds, toolchains e dependências.
+# Esta é a pasta mais importante a ser ignorada.
+.pio/
+
+# Arquivos de build do C/C++
 *.o
-*.ko
-*.obj
-*.elf
-
-# Linker output
-*.ilk
-*.map
-*.exp
-
-# Precompiled Headers
-*.gch
-*.pch
-
-# Libraries
-*.lib
+*.d
 *.a
-*.la
-*.lo
-
-# Shared objects (inc. Windows DLLs)
-*.dll
 *.so
-*.so.*
-*.dylib
-
-# Executables
-*.exe
-*.out
-*.app
-*.i*86
-*.x86_64
+*.elf
+*.bin
 *.hex
 
-# Debug files
-*.dSYM/
-*.su
-*.idb
-*.pdb
-
-# Kernel Module Compile Results
-*.mod*
-*.cmd
-.tmp_versions/
-modules.order
-Module.symvers
-Mkfile.old
-dkms.conf
-
-# debug information files
-*.dwo
+# Arquivos gerados pelo Python
+__pycache__/
+*.pyc
