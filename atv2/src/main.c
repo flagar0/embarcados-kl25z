@@ -10,32 +10,6 @@
 #include <string.h>
 
 #define TPM_MODULE 1000
-// Define o LED usando Device Tree
-#define LEDRED DT_ALIAS(led2)
-#define LEDGREEN DT_ALIAS(led0)
-#define LEDBLUE DT_ALIAS(led1)
-
-
-// Verifica se o LED está definido no Device Tree
-#if DT_NODE_HAS_STATUS(LEDGREEN, okay)
-static const struct gpio_dt_spec ledgreen = GPIO_DT_SPEC_GET(LEDGREEN, gpios);
-#else
-#error "Unsupported board: led0 devicetree alias is not defined"
-#endif
-
-// Verifica se o LED está definido no Device Tree
-#if DT_NODE_HAS_STATUS(LEDRED, okay)
-static const struct gpio_dt_spec ledred = GPIO_DT_SPEC_GET(LEDRED, gpios);
-#else
-#error "Unsupported board: led2 devicetree alias is not defined"
-#endif
-
-// Verifica se o LED está definido no Device Tree
-#if DT_NODE_HAS_STATUS(LEDBLUE, okay)
-static const struct gpio_dt_spec ledblue = GPIO_DT_SPEC_GET(LEDBLUE, gpios);
-#else
-#error "Unsupported board: led1 devicetree alias is not defined"
-#endif
 int main(void)
 {
     const struct device *uart_dev =
@@ -82,7 +56,6 @@ int main(void)
 while (1)
 {
     uint8_t c;
-    // Há caractere disponível?
     if (uart_poll_in(uart_dev, &c) == 0)
     {
         // Ignora '\r'
