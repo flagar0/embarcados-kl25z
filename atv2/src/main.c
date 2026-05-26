@@ -69,23 +69,17 @@ while (1)
         if (c == '\n' || c=='\r')
         {
             rx_buf[buf_ptr] = '\0';
-
             if (buf_ptr > 0)
             {
                 int numero = atoi(rx_buf);
-
                 // Limita 0-100
                 if (numero < 0)
                     numero = 0;
-
                 if (numero > 100)
                     numero = 100;
-
                 uint16_t duty =
                     (numero * TPM_MODULE) / 100;
-
                 pwm_tpm_CnV(TPM2, canal, duty);
-
                 printk("\nPWM = %d%%\n", numero);
                 canal++;
                 if (canal ==2){
@@ -96,11 +90,10 @@ while (1)
             // Limpa buffer
             buf_ptr = 0;
             memset(rx_buf, 0, sizeof(rx_buf));
-
             printk("Canal = %d\n", canal);
             printk("Digite outro valor:\n");
         }
-        else
+    else
         {
             // Aceita apenas números
             if ((c >= '0') && (c <= '9'))
