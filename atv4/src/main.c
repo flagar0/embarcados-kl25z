@@ -31,31 +31,27 @@ void main(void)
     // desliga leds
     PTB->PSOR = (1 << 19);
     PTD->PSOR = (1 << 1);
-    // 4. Garante que o gatilho será via Software (ADTRG = 0)
+    // gatilho via software
     ADC0->SC2 &= ~ADC_SC2_ADTRG_MASK;
 
-    // 5. Configura fonte de clock e resolução
-    // Zerando a máscara MODE garantimos resolução de 8 bits (MODE = 0)
+    //clock e resolucao
     ADC0->CFG1 &= ~ADC_CFG1_MODE_MASK; 
     ADC0->CFG1 |= ADC_CFG1_ADICLK(3); // Clock Assíncrono (ADACK)
 
     uint16_t saida;
-    printk("Iniciando leituras...\n"); // Use printk se for seu padrão
+    printk("Iniciando leituras...\n"); 
 
     while (1) {
-        // Dispara a conversão analógica selecionando o canal 9 (PTB1)
-        // Isso deve ficar dentro do loop para disparar uma nova medição a cada ciclo
+        // canal 9 
         ADC0->SC1[0] = ADC_SC1_ADCH(9);
 
-        // Fica travado aguardando a flag COCO (Conversion Complete) ir para 1
+        // le o coco
         while (NXP_FLD2VAL(ADC_SC1_COCO, ADC0->SC1[0]) == 0) {
-            // Aguardando o ADC terminar...
+            // espera leitura
         }
 
-        // Lê o resultado. Atenção: Ao ler o registrador R[0], a flag COCO volta para 0 automaticamente!
         saida = ADC0->R[0];
         
-        // Imprime usando %u pois saida é uint16_t (unsigned)
         printk("SAIDA: %u\n", saida); 
         if (saida <= 20){
             // led verde
@@ -70,7 +66,7 @@ void main(void)
             PTB->PSOR = (1 << 19);
             PTD->PSOR = (1 << 1);
         }
-        // Pequeno atraso para não encher sua tela de números absurdamente rápido
+        // delay
         delayMs(200); 
     }
 }
