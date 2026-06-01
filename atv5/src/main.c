@@ -1,213 +1,97 @@
 #include <zephyr/kernel.h>
-#include <zephyr/sys/printk.h>
-#include <MKL25Z4.h>
+#include <zephyr/device.h>
+#include <zephyr/drivers/gpio.h>
+#include <pwm_z42.h>
 
-/*
- * HC-SR04
- *
- * TRIG -> PTB2
- * ECHO -> PTB0 (TPM1_CH0)
- *
- * IMPORTANTE:
- * O pino ECHO do HC-SR04 é 5V.
- * Use divisor resistivo para entrar no PTB0.
- */
+#define TPM_IRQ_LINE TPM1_IRQn
+#define TPM_IRQ_PRIORITY 1
+#define TPM_MODULE 10000
 
-#define TRIG_PIN 2
+#define TPM_CLOCK_HZ 21000000.0f
+#define TPM_PRESCALER 128.0f
 
-volatile uint32_t rise_capture = 0;
-volatile uint32_t fall_capture = 0;
-volatile uint32_t pulse_ticks = 0;
+volatile uint16_t captured_rise = 0;  // tick da borda de subida
+volatile uint16_t captured_fall = 0;  // tick da borda de descida
+volatile bool echo = false;
+volatile bool waiting_fall = false;   // controla qual borda estamos esperando
 
-volatile uint8_t capture_state = 0;
-
-/*
- * TPM1 clock:
- * 48 MHz / 8 = 6 MHz
- *
- * 1 tick = 1/6 us
- */
-
-void TPM1_IRQHandler(void)
+void tpm1_isr(void *arg)
 {
-    /*
-     * Limpa flag da interrupção
-     */
-    TPM1->CONTROLS[0].CnSC |= TPM_CnSC_CHF_MASK;
+    TPM1->STATUS |= TPM_STATUS_CH1F_MASK;
 
-    /*
-     * Borda de subida
-     */
-    if (capture_state == 0)
-    {
-        rise_capture = TPM1->CONTROLS[0].CnV;
+    if (!waiting_fall) {
+        // Primeira interrupção: borda de SUBIDA
+        captured_rise = TPM1->CONTROLS[1].CnV;
+        waiting_fall = true;
 
-        /*
-         * Agora captura borda de descida
-         */
-        TPM1->CONTROLS[0].CnSC &=
-            ~(TPM_CnSC_ELSA_MASK |
-              TPM_CnSC_ELSB_MASK);
+        // Troca para capturar borda de DESCIDA
+        TPM1->CONTROLS[1].CnSC &= ~TPM_CnSC_ELSA_MASK;
+        TPM1->CONTROLS[1].CnSC |= TPM_CnSC_ELSB_MASK;
 
-        TPM1->CONTROLS[0].CnSC |= TPM_CnSC_ELSA_MASK;
+    } else {
+        // Segunda interrupção: borda de DESCIDA
+        captured_fall = TPM1->CONTROLS[1].CnV;
+        waiting_fall = false;
+        echo = true;
 
-        capture_state = 1;
-    }
-    else
-    {
-        /*
-         * Borda de descida
-         */
-        fall_capture = TPM1->CONTROLS[0].CnV;
-
-        /*
-         * Trata overflow
-         */
-        if (fall_capture >= rise_capture)
-        {
-            pulse_ticks = fall_capture - rise_capture;
-        }
-        else
-        {
-            pulse_ticks =
-                (65535 - rise_capture) + fall_capture;
-        }
-
-        /*
-         * Volta para subida
-         */
-        TPM1->CONTROLS[0].CnSC &=
-            ~(TPM_CnSC_ELSA_MASK |
-              TPM_CnSC_ELSB_MASK);
-
-        TPM1->CONTROLS[0].CnSC |= TPM_CnSC_ELSB_MASK;
-
-        capture_state = 0;
+        // Volta para capturar borda de SUBIDA
+        TPM1->CONTROLS[1].CnSC |= TPM_CnSC_ELSA_MASK;
+        TPM1->CONTROLS[1].CnSC &= ~TPM_CnSC_ELSB_MASK;
     }
 }
 
 void main(void)
 {
-    float pulse_us;
-    float distance_cm;
+    // TPM2: Trigger em PTB2
+    pwm_tpm_Init(TPM2, TPM_PLLFLL, TPM_MODULE, TPM_CLK, PS_8, EDGE_PWM);
+    pwm_tpm_Ch_Init(TPM2, 0, TPM_PWM_H, GPIOB, 2);
 
-    printk("Inicializando HC-SR04...\n");
+    // TPM1: Captura Echo em PTB1, começa na borda de SUBIDA
+    pwm_tpm_Init(TPM1, TPM_PLLFLL, 65535, TPM_CLK, PS_128, EDGE_PWM);
+    pwm_tpm_Ch_Init(TPM1, 1, TPM_INPUT_CAPTURE_RISING | TPM_CHANNEL_INTERRUPT, GPIOB, 1);
 
-    /*
-     * Habilita clock PORTB
-     */
-    SIM->SCGC5 |= SIM_SCGC5_PORTB_MASK;
+    IRQ_CONNECT(TPM_IRQ_LINE, TPM_IRQ_PRIORITY, tpm1_isr, NULL, 0);
+    irq_enable(TPM_IRQ_LINE);
 
-    /*
-     * Habilita TPM1
-     */
-    SIM->SCGC6 |= SIM_SCGC6_TPM1_MASK;
+    while (1) {
+        echo = false;
 
-    /*
-     * Clock TPM = PLL/FLL
-     */
-    SIM->SOPT2 |= SIM_SOPT2_TPMSRC(1);
-
-    /*
-     * PTB0 = TPM1_CH0
-     * ALT3
-     */
-    PORTB->PCR[0] = PORT_PCR_MUX(3);
-
-    /*
-     * PTB2 = GPIO
-     */
-    PORTB->PCR[2] = PORT_PCR_MUX(1);
-
-    /*
-     * PTB2 saída
-     */
-    GPIOB->PDDR |= (1 << TRIG_PIN);
-
-    /*
-     * Trigger inicia LOW
-     */
-    GPIOB->PCOR = (1 << TRIG_PIN);
-
-    /*
-     * TPM1 configuração
-     */
-    TPM1->SC = 0;
-
-    /*
-     * MOD máximo
-     */
-    TPM1->MOD = 65535;
-
-    /*
-     * Prescaler = 8
-     */
-    TPM1->SC |= TPM_SC_PS(3);
-
-    /*
-     * Input Capture:
-     * borda de subida + interrupção
-     */
-    TPM1->CONTROLS[0].CnSC =
-        TPM_CnSC_CHIE_MASK |
-        TPM_CnSC_ELSB_MASK;
-
-    /*
-     * Habilita IRQ
-     */
-    NVIC_ClearPendingIRQ(TPM1_IRQn);
-    NVIC_EnableIRQ(TPM1_IRQn);
-
-    /*
-     * Inicia TPM
-     */
-    TPM1->SC |= TPM_SC_CMOD(1);
-
-    printk("Sistema iniciado\n");
-
-    while (1)
-    {
-        /*
-         * Zera medida anterior
-         */
-        pulse_ticks = 0;
-
-        /*
-         * Trigger HC-SR04
-         */
-
-        GPIOB->PCOR = (1 << TRIG_PIN);
-        k_usleep(2);
-
-        GPIOB->PSOR = (1 << TRIG_PIN);
+        // Envia trigger de 10µs
+        pwm_tpm_CnV(TPM2, 0, 125);
         k_usleep(10);
+        pwm_tpm_CnV(TPM2, 0, 0);
 
-        GPIOB->PCOR = (1 << TRIG_PIN);
+        // Aguarda o echo por até 50 ms
+        for (int i = 0; i < 50; i++) {
+            if (echo) {
+                break;
+            }
+            k_msleep(1);
+        }
 
-        /*
-         * Espera eco
-         */
-        k_msleep(60);
+        if (echo) {
 
-        /*
-         * ticks -> us
-         *
-         * 6 MHz:
-         * 6 ticks = 1 us
-         */
-        pulse_us = pulse_ticks / 6.0f;
+            // Calcula duração do pulso em ticks
+            uint16_t pulse_ticks;
 
-        /*
-         * HC-SR04:
-         * distancia(cm) = tempo_us / 58
-         */
-        distance_cm = pulse_us / 58.0f;
+            if (captured_fall >= captured_rise) {
+                pulse_ticks = captured_fall - captured_rise;
+            } else {
+                pulse_ticks = (65535 - captured_rise) + captured_fall + 1;
+            }
 
-        printk("Ticks: %u\n", pulse_ticks);
-        printk("Pulso: %d us\n", (int)pulse_us);
-        printk("Distancia: %d cm\n\n",
-               (int)distance_cm);
+            // Descarta medições inválidas
+            if (pulse_ticks < 5000) {
 
-        k_msleep(500);
+                float pulse_us = pulse_ticks *
+                    (TPM_PRESCALER * 1000000.0f / TPM_CLOCK_HZ);
+
+                float distance_cm = pulse_us / 58.0f;
+
+                printk("Distancia: %.1f cm\n", distance_cm);
+            }
+        }
+
+        k_msleep(100);
     }
 }
