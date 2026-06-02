@@ -26,7 +26,7 @@
 #define TPM_MCGIRCLK 	3 	// MCGIRCLK clock
 // counter is disabled
 #define TPM_CNT_DIS 	0 
-// counter increments on every LPTPM counter clock
+// counter increments on every LPTPM counter clock\
 #define TPM_CLK 		1
 // counter increments on rising edge of LPTPM_EXTCLK synchronized to the LPTPM counter clock
 #define TPM_EXT_CLK 	2 
