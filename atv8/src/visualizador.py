@@ -12,7 +12,7 @@ from collections import deque
 PORTA = "COM17"
 BAUDRATE = 115200
 
-N_PONTOS = 8000
+N_PONTOS = 4000
 
 # ==================================
 # SERIAL
@@ -130,7 +130,7 @@ fig, axs = plt.subplots(
 )
 
 linha_ax, = axs[0].plot([], [], label="X")
-linha_ay, = axs[0].plot([], [], label="Y")
+linha_ay, = axs[0].plot([], [], label="Z filtrado")
 linha_az, = axs[0].plot([], [], label="Z")
 
 linha_freq, = axs[1].plot([], [], label="Hz")
@@ -154,8 +154,13 @@ def atualizar(frame):
     if len(tempo) < 2:
         return
 
+    OFFSET_Y = -5.0
+
     linha_ax.set_data(tempo, ax)
-    linha_ay.set_data(tempo, ay)
+    linha_ay.set_data(
+        tempo,
+        np.array(ay) + OFFSET_Y
+    )
     linha_az.set_data(tempo, az)
 
     if len(freq_inst) > 0:
@@ -182,7 +187,7 @@ def atualizar(frame):
 
     valores = (
         list(ax)
-        + list(ay)
+        + list(np.array(ay) + OFFSET_Y)
         + list(az)
     )
 

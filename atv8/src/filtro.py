@@ -1,63 +1,31 @@
+from scipy.signal import firwin, freqz
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.signal import firwin, freqz
 
-# =====================================================
-# CONFIGURAÇÕES
-# =====================================================
+# ============================================
+# CONFIGURAÇÃO
+# ============================================
 
-FS = 800.0          # taxa de amostragem
-F1 = 40.0           # início da banda
-F2 = 60.0           # fim da banda
+FS = 800.0
+FC = 30.0
 
-NUM_TAPS = 31       # número de coeficientes FIR
+NUM_TAPS = 51
 
-ARQUIVO = "dados.csv"
-
-# =====================================================
-# LEITURA DOS DADOS
-# =====================================================
-
-dados = np.loadtxt(
-    ARQUIVO,
-    delimiter=","
-)
-
-tempo = dados[:,0]
-z = dados[:,1]
-
-# =====================================================
-# FFT
-# =====================================================
-
-z = z - np.mean(z)
-
-N = len(z)
-
-fft = np.fft.rfft(z)
-
-freq = np.fft.rfftfreq(
-    N,
-    d=1/FS
-)
-
-mag = np.abs(fft)/N
-
-# =====================================================
-# PROJETO FIR
-# =====================================================
+# ============================================
+# FIR PASSA-BAIXA
+# ============================================
 
 coef = firwin(
     NUM_TAPS,
-    [F1, F2],
+    FC,
     fs=FS,
-    pass_zero=False,
+    pass_zero=True,
     window='hamming'
 )
 
-# =====================================================
+# ============================================
 # RESPOSTA EM FREQUÊNCIA
-# =====================================================
+# ============================================
 
 w, h = freqz(
     coef,
@@ -65,50 +33,33 @@ w, h = freqz(
     fs=FS
 )
 
-# =====================================================
-# PLOT FFT
-# =====================================================
-
-plt.figure(figsize=(12,6))
-
-plt.plot(freq, mag)
-
-plt.title("FFT do Sinal")
-
-plt.xlabel("Frequência (Hz)")
-plt.ylabel("Magnitude")
-
-plt.grid(True)
-
-# =====================================================
-# PLOT FILTRO
-# =====================================================
-
 plt.figure(figsize=(12,6))
 
 plt.plot(
     w,
     20*np.log10(
-        np.maximum(
-            np.abs(h),
-            1e-10
-        )
+        np.maximum(np.abs(h),1e-10)
     )
 )
 
-plt.axvline(F1)
-plt.axvline(F2)
+plt.axvline(
+    FC,
+    linestyle='--'
+)
 
-plt.title("Resposta em Frequência do FIR")
+plt.title(
+    f'FIR Passa-Baixa {FC} Hz'
+)
 
-plt.xlabel("Frequência (Hz)")
-plt.ylabel("Ganho (dB)")
-
+plt.xlabel('Frequência (Hz)')
+plt.ylabel('Ganho (dB)')
 plt.grid(True)
 
-# =====================================================
+plt.show()
+
+# ============================================
 # EXPORTAÇÃO C
-# =====================================================
+# ============================================
 
 print("\n")
 print("#define FIR_ORDER", NUM_TAPS)
@@ -119,11 +70,11 @@ print(
 )
 print("{")
 
-for i,c in enumerate(coef):
+for i, c in enumerate(coef):
 
-    if i != NUM_TAPS-1:
+    if i != NUM_TAPS - 1:
         print(
-            f"    {c:.9ff},"
+            f"    {c:.9f}f,"
         )
     else:
         print(
@@ -132,17 +83,6 @@ for i,c in enumerate(coef):
 
 print("};")
 
-# =====================================================
-# INFO
-# =====================================================
-
-print("")
 print(
-    f"Atraso do filtro = {(NUM_TAPS-1)/2/FS*1000:.2f} ms"
+    f"Atraso = {(NUM_TAPS-1)/2/FS*1000:.2f} ms"
 )
-
-print(
-    f"Coeficientes = {NUM_TAPS}"
-)
-
-plt.show()
