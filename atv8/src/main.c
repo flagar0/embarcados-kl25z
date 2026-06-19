@@ -8,14 +8,13 @@
 
 //LOG_MODULE_REGISTER(app, LOG_LEVEL_DBG);
 
-
 // === Endereço e registradores do MMA8451Q ===
 #define MMA8451Q_I2C_ADDR    0x1D
 #define MMA8451Q_CTRL_REG1   0x2A
 
 // === Bits de configuração ===
 #define MMA8451Q_ACTIVE_BIT  0x01
-#define MMA8451Q_ODR   (0x0 << 0)  // 800 Hz conforme datasheet (DR=111b)
+#define MMA8451Q_ODR   (0x0 << 3)  // 800 Hz conforme datasheet (DR=111b)
 
 // DR2 DR1 DR0 ODR Period
 // 0 0 0 800 Hz 1.25 ms
@@ -188,7 +187,6 @@ void mma8451q_configurar_odr(void)
     printk("MMA8451Q configurado para 800 Hz via I2C.\n");
 }
 
-
 /* -------- THREAD A: acelerometro -------- */
 void thread_a(void *p1, void *p2, void *p3)
 {
@@ -231,11 +229,11 @@ void thread_a(void *p1, void *p2, void *p3)
             sensor_channel_get(accel, SENSOR_CHAN_ACCEL_Z, &accel_z);
 
             //LOG_INF("Z: %d.%06d", accel_z.val1, abs(accel_z.val2));
-            //float z =
-            //    accel_z.val1 +
-            //    accel_z.val2 / 1000000.0f;
+            float z =
+               accel_z.val1 +
+               accel_z.val2 / 1000000.0f;
 
-            //z_filtrado = fir_filter_z(z);
+            z_filtrado = fir_filter_z(z);
             //k_mutex_unlock(&valor_x);
             k_sem_give(&dado_coletado); // coletou e incrementa
         }
@@ -269,11 +267,8 @@ void thread_b(void *p1, void *p2, void *p3)
 K_THREAD_DEFINE(threadAcce, 512, thread_a, NULL, NULL, NULL, 2, 0, 0);
 K_THREAD_DEFINE(threadComu, 512, thread_b, NULL, NULL, NULL, 5, 0, 0);
 
-
 /* -------- Função main -------- */
 int main(void)
 {
-
-    
     return 0;
 }
